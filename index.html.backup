@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>连板股票模拟交易训练系统</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- 顶部导航栏 -->
+    <header class="header">
+        <div class="header-left">
+            <h1>连板模拟交易训练系统</h1>
+        </div>
+        <div class="header-center">
+            <div class="date-selector">
+                <label>当前交易日：</label>
+                <select id="currentDate"></select>
+                <button id="prevDay" class="btn btn-small">上一日</button>
+                <button id="nextDay" class="btn btn-small">下一日</button>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="account-info">
+                <span>资金: <strong id="availableFund">100,000.00</strong> 元</span>
+                <span>持仓市值: <strong id="positionValue">0.00</strong> 元</span>
+                <span>总资产: <strong id="totalAsset">100,000.00</strong> 元</span>
+                <span>收益率: <strong id="totalReturn">0.00%</strong></span>
+            </div>
+            <button class="btn btn-small btn-reset" id="btnReset">重置</button>
+        </div>
+    </header>
+
+    <!-- 主内容区域 -->
+    <main class="main-container">
+        <!-- 左侧连板天梯 -->
+        <aside class="ladder-panel">
+            <div class="panel-header">
+                <h2>连板天梯</h2>
+                <div class="filter-group">
+                    <select id="limitDaysFilter">
+                        <option value="0">全部连板</option>
+                        <option value="1">首板</option>
+                        <option value="2">2连板</option>
+                        <option value="3">3连板</option>
+                        <option value="4">4连板</option>
+                        <option value="5">5连板+</option>
+                    </select>
+                </div>
+            </div>
+            <div class="ladder-list" id="ladderList">
+                <!-- 连板股票列表将通过JS动态生成 -->
+            </div>
+        </aside>
+
+        <!-- 中间K线图区域 -->
+        <section class="chart-panel">
+            <div class="stock-info" id="stockInfo">
+                <h3 id="stockName">选择一只股票查看K线</h3>
+                <div class="stock-details">
+                    <span id="stockCode">--</span>
+                    <span id="currentPrice">--</span>
+                    <span id="limitUpDays">--</span>
+                </div>
+            </div>
+            <div class="chart-container" id="klineChart"></div>
+            <div class="chart-controls">
+                <button class="btn btn-small" id="zoomIn">+</button>
+                <button class="btn btn-small" id="zoomOut">-</button>
+                <button class="btn btn-small" id="resetChart">重置</button>
+                <select id="chartPeriod">
+                    <option value="all">全部</option>
+                    <option value="10">近10日</option>
+                    <option value="20">近20日</option>
+                    <option value="60">近60日</option>
+                    <option value="120">近120日</option>
+                </select>
+            </div>
+        </section>
+
+        <!-- 右侧交易面板 -->
+        <aside class="trade-panel">
+            <!-- 股票搜索 -->
+            <div class="stock-search">
+                <h4>股票搜索</h4>
+                <div class="search-box">
+                    <input type="text" id="stockSearch" placeholder="输入代码或名称搜索">
+                    <button class="btn btn-small" id="btnSearch">搜索</button>
+                </div>
+                <div class="search-results" id="searchResults"></div>
+            </div>
+
+            <!-- 我的持仓 -->
+            <div class="my-positions">
+                <h4>我的持仓</h4>
+                <div id="myPositionsList">
+                    <p class="empty-tip">暂无持仓</p>
+                </div>
+            </div>
+
+            <!-- 交易操作区 -->
+            <div class="trade-section">
+                <h3>交易操作</h3>
+                <div class="selected-stock" id="selectedStock">
+                    <p>请从左侧选择一只股票</p>
+                </div>
+
+                <!-- 条件单（涨停买入） -->
+                <div class="trade-action" id="条件单Section">
+                    <h4>条件单 - 涨停价买入</h4>
+                    <div class="input-group">
+                        <label>涨停价格：</label>
+                        <input type="number" id="limitUpPrice" step="0.01" readonly>
+                    </div>
+                    <div class="input-group">
+                        <label>委托股数：</label>
+                        <input type="number" id="conditionQuantity" step="100" placeholder="100的倍数">
+                    </div>
+                    <button class="btn btn-condition" id="btnConditionOrder">设置条件单</button>
+                </div>
+
+                <!-- 开盘加仓决策 -->
+                <div class="trade-action" id="addPositionSection">
+                    <h4>开盘加仓决策</h4>
+                    <div class="next-day-info">
+                        <p>次日开盘涨跌幅：<span id="nextDayOpenChange">--</span></p>
+                        <p>开盘价格：<span id="nextDayOpenPrice">--</span></p>
+                    </div>
+                    <div class="input-group">
+                        <label>加仓价格：</label>
+                        <input type="number" id="addPrice" step="0.01">
+                    </div>
+                    <div class="input-group">
+                        <label>加仓股数：</label>
+                        <input type="number" id="addQuantity" step="100" placeholder="100的倍数">
+                    </div>
+                    <button class="btn btn-add" id="btnAddPosition">确认加仓</button>
+                </div>
+
+                <!-- 卖出操作 -->
+                <div class="trade-action" id="sellSection">
+                    <h4>卖出持仓</h4>
+                    <div class="position-info" id="positionInfo">
+                        <p>持仓股数：<span id="holdQuantity">0</span> 股</p>
+                        <p>持仓成本：<span id="holdCost">0.00</span> 元</p>
+                        <p>浮动盈亏：<span id="holdProfit">0.00</span> 元</p>
+                    </div>
+                    <div class="input-group">
+                        <label>卖出价格：</label>
+                        <input type="number" id="sellPrice" step="0.01">
+                    </div>
+                    <div class="input-group">
+                        <label>卖出股数：</label>
+                        <input type="number" id="sellQuantity" step="100">
+                    </div>
+                    <button class="btn btn-sell" id="btnSell">确认卖出</button>
+                    <p class="tip" id="sellTip">T+1交易，今日买入不可卖出</p>
+                </div>
+            </div>
+
+            <!-- 条件单列表 -->
+            <div class="condition-orders">
+                <h4>已设置条件单</h4>
+                <div id="conditionOrdersList">
+                    <p class="empty-tip">暂无条件单</p>
+                </div>
+            </div>
+
+            <!-- 明日操作预览 -->
+            <div class="next-day-preview">
+                <h4>明日操作预览</h4>
+                <div id="nextDayActions">
+                    <p class="empty-tip">暂无待执行操作</p>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- 底部持仓和交易记录 -->
+    <footer class="bottom-panel">
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button class="tab-btn active" data-tab="positions">当前持仓</button>
+                <button class="tab-btn" data-tab="records">交易记录</button>
+                <button class="tab-btn" data-tab="summary">收益统计</button>
+            </div>
+            <div class="tab-buttons nav-buttons">
+                <span class="current-date-bottom" id="currentDateBottom"></span>
+                <button class="btn btn-small" id="prevDayBottom">上一日</button>
+                <button class="btn btn-small" id="nextDayBottom">下一日</button>
+            </div>
+            <div class="tab-contents">
+                <!-- 持仓列表 -->
+                <div class="tab-content active" id="positionsTab">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>股票代码</th>
+                                <th>股票名称</th>
+                                <th>持仓股数</th>
+                                <th>成本价</th>
+                                <th>当前价</th>
+                                <th>浮动盈亏</th>
+                                <th>盈亏比例</th>
+                                <th>买入日期</th>
+                                <th>可交易日</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="positionsBody">
+                            <tr>
+                                <td colspan="10" class="empty-tip">暂无持仓</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 交易记录 -->
+                <div class="tab-content" id="recordsTab">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>交易日期</th>
+                                <th>股票代码</th>
+                                <th>股票名称</th>
+                                <th>买卖</th>
+                                <th>价格</th>
+                                <th>股数</th>
+                                <th>金额</th>
+                                <th>手续费</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recordsBody">
+                            <tr>
+                                <td colspan="9" class="empty-tip">暂无交易记录</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 收益统计 -->
+                <div class="tab-content" id="summaryTab">
+                    <div class="summary-stats">
+                        <div class="stat-item">
+                            <label>总交易次数</label>
+                            <span id="totalTrades">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>盈利次数</label>
+                            <span id="profitTrades">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>亏损次数</label>
+                            <span id="lossTrades">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>胜率</label>
+                            <span id="winRate">0%</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>总盈亏</label>
+                            <span id="totalProfitLoss">0.00</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>手续费支出</label>
+                            <span id="totalFees">0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- 消息提示 -->
+    <div class="toast" id="toast"></div>
+
+    <!-- 确认对话框 -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content">
+            <h4 id="modalTitle">确认交易</h4>
+            <p id="modalMessage"></p>
+            <div class="modal-actions">
+                <button class="btn" id="modalCancel">取消</button>
+                <button class="btn btn-primary" id="modalConfirm">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重置确认对话框 -->
+    <div class="modal" id="resetModal">
+        <div class="modal-content">
+            <h4 id="resetModalTitle">重置系统</h4>
+            <div class="reset-options">
+                <p>是否保存当前交易记录、收益统计等信息？</p>
+                <div class="reset-buttons">
+                    <button class="btn" id="btnResetNoSave">不保存，直接重置</button>
+                    <button class="btn" id="btnResetSave">保存数据后重置</button>
+                    <button class="btn" id="btnResetCancel">取消</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="data/kline_data.js"></script>
+    <script src="data/ladder_data.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

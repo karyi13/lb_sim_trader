@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>连板模拟交易</title>
+    <link rel="stylesheet" href="css/mobile.css">
+</head>
+<body>
+    <!-- 顶部固定头部 -->
+    <header class="mobile-header">
+        <div class="header-top">
+            <h1 class="app-title">连板模拟交易</h1>
+            <a href="index.html" class="pc-link">PC版</a>
+            <button class="btn-reset" id="btnReset">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                </svg>
+            </button>
+        </div>
+        <!-- 日期导航 -->
+        <div class="date-nav">
+            <button class="nav-btn" id="prevDay">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M15 18l-6-6 6-6"/>
+                </svg>
+            </button>
+            <select id="currentDate" class="date-select"></select>
+            <button class="nav-btn" id="nextDay">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M9 18l6-6-6-6"/>
+                </svg>
+            </button>
+        </div>
+        <!-- 账户信息 -->
+        <div class="account-bar">
+            <div class="account-item">
+                <span class="label">总资产</span>
+                <span class="value" id="totalAsset">100,000.00</span>
+            </div>
+            <div class="account-item">
+                <span class="label">可用</span>
+                <span class="value" id="availableFund">100,000.00</span>
+            </div>
+            <div class="account-item">
+                <span class="label">收益</span>
+                <span class="value" id="totalReturn">+0.00%</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="mobile-main" id="mainContent">
+        <!-- 天梯页面 -->
+        <section class="page active" id="pageLadder">
+            <div class="page-header">
+                <h2>连板天梯</h2>
+                <select id="limitDaysFilter" class="filter-select">
+                    <option value="0">全部</option>
+                    <option value="1">首板</option>
+                    <option value="2">2连板</option>
+                    <option value="3">3连板</option>
+                    <option value="4">4连板</option>
+                    <option value="5">5连板+</option>
+                </select>
+            </div>
+            <div class="ladder-list" id="ladderList"></div>
+        </section>
+
+        <!-- K线页面 -->
+        <section class="page" id="pageChart">
+            <div class="stock-info-header" id="stockInfoHeader">
+                <div class="stock-title">
+                    <h3 id="stockName">选择股票</h3>
+                    <span class="stock-code" id="stockCode">--</span>
+                </div>
+                <div class="stock-price" id="currentPrice">--</div>
+            </div>
+            <div class="chart-container" id="klineChart"></div>
+            <div class="chart-controls">
+                <button class="control-btn" id="zoomIn">放大</button>
+                <button class="control-btn" id="resetChart">重置</button>
+                <button class="control-btn" id="zoomOut">缩小</button>
+            </div>
+            <div class="stock-detail-info">
+                <div class="detail-row">
+                    <span>当前价</span>
+                    <strong id="detailPrice">--</strong>
+                </div>
+                <div class="detail-row">
+                    <span>连板天数</span>
+                    <strong id="detailLimitUp">--</strong>
+                </div>
+            </div>
+        </section>
+
+        <!-- 交易页面 -->
+        <section class="page" id="pageTrade">
+            <!-- 当前持仓 -->
+            <div class="trade-section">
+                <div class="section-header" onclick="toggleSection('myPositions')">
+                    <h3>我的持仓</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content expanded" id="myPositions">
+                    <div id="myPositionsList"></div>
+                </div>
+            </div>
+
+            <!-- 选中的股票 -->
+            <div class="trade-section">
+                <div class="section-header" onclick="toggleSection('selectedStockInfo')">
+                    <h3>当前股票</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content expanded" id="selectedStockInfo">
+                    <div class="selected-stock-card" id="selectedStock">
+                        <p>请从天梯选择股票</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 条件单 -->
+            <div class="trade-section">
+                <div class="section-header" onclick="toggleSection('conditionOrder')">
+                    <h3>条件单 - 涨停买入</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content expanded" id="conditionOrder">
+                    <div class="trade-form">
+                        <div class="form-row">
+                            <label>涨停价</label>
+                            <input type="number" id="limitUpPrice" readonly class="form-input">
+                        </div>
+                        <div class="form-row">
+                            <label>股数</label>
+                            <input type="number" id="conditionQuantity" step="100" placeholder="100的倍数" class="form-input">
+                        </div>
+                        <button class="btn btn-condition" id="btnConditionOrder">设置条件单</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 买入 -->
+            <div class="trade-section">
+                <div class="section-header" onclick="toggleSection('addPosition')">
+                    <h3>买入</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content expanded" id="addPosition">
+                    <div class="next-day-info" id="nextDayInfo">
+                        <p>次日开盘: <span id="nextDayOpenChange">--</span></p>
+                        <p>开盘价: <span id="nextDayOpenPrice">--</span></p>
+                    </div>
+                    <div class="trade-form">
+                        <div class="form-row">
+                            <label>买入价</label>
+                            <input type="number" id="addPrice" step="0.01" class="form-input">
+                        </div>
+                        <div class="form-row">
+                            <label>股数</label>
+                            <input type="number" id="addQuantity" step="100" placeholder="100的倍数" class="form-input">
+                        </div>
+                        <div class="quick-ratio-buttons">
+                            <button class="btn btn-ratio" data-ratio="0.25">1/4仓</button>
+                            <button class="btn btn-ratio" data-ratio="0.5">1/2仓</button>
+                            <button class="btn btn-ratio" data-ratio="1">全仓</button>
+                        </div>
+                        <button class="btn btn-add" id="btnAddPosition">确认买入</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 卖出操作 -->
+            <div class="trade-section" id="sellSection" style="display:none;">
+                <div class="section-header" onclick="toggleSection('sellPosition')">
+                    <h3>卖出持仓</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content expanded" id="sellPosition">
+                    <div class="position-detail" id="positionDetail">
+                        <div class="detail-item">
+                            <span>持仓股数</span>
+                            <strong id="holdQuantity">0</strong>
+                        </div>
+                        <div class="detail-item">
+                            <span>成本价</span>
+                            <strong id="holdCost">0.00</strong>
+                        </div>
+                        <div class="detail-item">
+                            <span>浮动盈亏</span>
+                            <strong id="holdProfit">0.00</strong>
+                        </div>
+                    </div>
+                    <div class="trade-form">
+                        <div class="form-row">
+                            <label>卖出价</label>
+                            <input type="number" id="sellPrice" step="0.01" class="form-input">
+                        </div>
+                        <div class="form-row">
+                            <label>股数</label>
+                            <input type="number" id="sellQuantity" step="100" class="form-input">
+                        </div>
+                        <button class="btn btn-sell" id="btnSell">确认卖出</button>
+                    </div>
+                    <p class="tip" id="sellTip">T+1交易，今日买入不可卖出</p>
+                </div>
+            </div>
+
+            <!-- 条件单列表 -->
+            <div class="trade-section">
+                <div class="section-header" onclick="toggleSection('conditionOrders')">
+                    <h3>已设条件单</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content" id="conditionOrders">
+                    <div id="conditionOrdersList"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 持仓页面 -->
+        <section class="page" id="pagePositions">
+            <div class="page-header">
+                <h2>当前持仓</h2>
+                <span class="count" id="positionCount">0</span>
+            </div>
+            <div class="positions-list" id="positionsListBody">
+                <p class="empty-tip">暂无持仓</p>
+            </div>
+        </section>
+
+        <!-- 记录页面 -->
+        <section class="page" id="pageRecords">
+            <div class="page-header">
+                <h2>交易记录</h2>
+            </div>
+            <button class="btn-tab" onclick="switchRecordTab('records')" id="tabRecords">交易记录</button>
+            <button class="btn-tab" onclick="switchRecordTab('summary')" id="tabSummary">收益统计</button>
+            <div class="record-content">
+                <div id="recordsContent" class="record-section active">
+                    <div class="trades-list" id="tradesList">
+                        <p class="empty-tip">暂无交易记录</p>
+                    </div>
+                </div>
+                <div id="summaryContent" class="record-section">
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <span class="label">总交易</span>
+                            <span class="value" id="totalTrades">0</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="label">盈利次数</span>
+                            <span class="value profit" id="profitTrades">0</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="label">亏损次数</span>
+                            <span class="value loss" id="lossTrades">0</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="label">胜率</span>
+                            <span class="value" id="winRate">0%</span>
+                        </div>
+                        <div class="summary-item full">
+                            <span class="label">总盈亏</span>
+                            <span class="value" id="totalProfitLoss">0.00</span>
+                        </div>
+                        <div class="summary-item full">
+                            <span class="label">手续费</span>
+                            <span class="value" id="totalFees">0.00 元</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 搜索页面 -->
+        <section class="page" id="pageSearch">
+            <div class="search-header">
+                <div class="search-box">
+                    <input type="text" id="stockSearch" placeholder="输入代码或名称搜索">
+                    <button class="search-btn" id="btnSearch">搜索</button>
+                </div>
+            </div>
+            <div class="search-results" id="searchResults">
+                <p class="empty-tip">输入股票代码或名称进行搜索</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- 底部导航 -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" data-page="pageLadder">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+            </svg>
+            <span>天梯</span>
+        </button>
+        <button class="nav-item" data-page="pageChart">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M3 3v18h18"/>
+                <path d="M18 9l-5 5-4-4-3 3"/>
+            </svg>
+            <span>K线</span>
+        </button>
+        <button class="nav-item" data-page="pageTrade">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+            <span>交易</span>
+        </button>
+        <button class="nav-item" data-page="pagePositions">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M3 3h18v18H3z"/>
+                <path d="M3 9h18M3 15h18M9 3v18"/>
+            </svg>
+            <span>持仓</span>
+        </button>
+        <button class="nav-item" data-page="pageRecords">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14,2 14,8 20,8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <line x1="10" y1="9" x2="8" y2="9"/>
+            </svg>
+            <span>记录</span>
+        </button>
+        <button class="nav-item" data-page="pageSearch">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <span>搜索</span>
+        </button>
+    </nav>
+
+    <!-- 消息提示 -->
+    <div class="toast" id="toast"></div>
+
+    <!-- 确认对话框 -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content">
+            <h4 id="modalTitle">确认</h4>
+            <p id="modalMessage"></p>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" id="modalCancel">取消</button>
+                <button class="btn btn-confirm" id="modalConfirm">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重置确认对话框 -->
+    <div class="modal" id="resetModal">
+        <div class="modal-content">
+            <h4>重置系统</h4>
+            <p>是否保存当前交易记录？</p>
+            <div class="reset-buttons">
+                <button class="btn" id="btnResetNoSave">不保存</button>
+                <button class="btn btn-primary" id="btnResetSave">保存后重置</button>
+                <button class="btn" id="btnResetCancel">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- K线数据按需加载器 -->
+    <script src="js/kline_loader.js"></script>
+    <!-- 精简版快速显示（预加载热门股票） -->
+    <script src="data/kline_data_core.js"></script>
+    <script src="data/ladder_data.js"></script>
+    <!-- 完整版作为回退（异步加载） -->
+    <script>
+    // 异步加载完整版K线数据作为回退
+    (function() {
+        var script = document.createElement('script');
+        script.src = 'data/kline_data.js';
+        script.async = true;
+        script.onload = function() {
+            console.log('[Fallback] K-line data loaded as fallback');
+            // 合并全局数据到加载器缓存
+            if (window.klineLoader && window.KLINE_DATA_GLOBAL) {
+                for (var code in window.KLINE_DATA_GLOBAL) {
+                    window.klineLoader.cache.set(code, window.KLINE_DATA_GLOBAL[code]);
+                }
+                // 同时合并到core
+                window.KLINE_DATA_CORE = window.KLINE_DATA_CORE || {};
+                Object.assign(window.KLINE_DATA_CORE, window.KLINE_DATA_GLOBAL);
+            }
+        };
+        document.head.appendChild(script);
+    })();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="js/mobile.js"></script>
+</body>
+</html>

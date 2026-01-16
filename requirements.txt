@@ -1,0 +1,10 @@
+pandas
+numpy
+pytdx
+akshare
+pyarrow
+tqdm
+requests
+rich
+pytest
+pytest-cov

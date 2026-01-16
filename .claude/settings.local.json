@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"\nconst fs = require\\(''fs''\\);\nconst content = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbceshi/data/kline_data.js'', ''utf8''\\);\n// 提取第一个股票的数据\nconst match = content.match\\(/\"\"\\(\\\\w+\\)\"\":\\\\s*\\\\{\\\\s*\"\"name\"\":\\\\s*\"\"\\([^\"\"]+\\)\"\"/\\);\nif \\(match\\) {\n  console.log\\(''First stock code:'', match[1]\\);\n  console.log\\(''First stock name:'', match[2]\\);\n}\n\")",
+      "Bash(node -e \"\nconst fs = require\\(''fs''\\);\nconst ladderContent = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbceshi/data/ladder_data.js'', ''utf8''\\);\nconst ladderMatch = ladderContent.match\\(/\"\"code\"\":\\\\s*\"\"\\([^\"\"]+\\)\"\"/g\\);\nif \\(ladderMatch\\) {\n  const codes = ladderMatch.slice\\(0, 5\\).map\\(s => s.match\\(/\"\"\\([^\"\"]+\\)\"\"/\\)[1]\\);\n  console.log\\(''Ladder stock codes:'', codes\\);\n}\n\nconst klineContent = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbceshi/data/kline_data.js'', ''utf8''\\);\nconst klineMatch = klineContent.match\\(/\"\"\\(\\\\w+\\)\"\":\\\\s*\\\\{\\\\s*\"\"name\"\"/\\);\nif \\(klineMatch\\) {\n  console.log\\(''First kline stock code:'', klineMatch[1]\\);\n}\n\")",
+      "Bash(node -e \"const fs = require\\(''fs''\\); const c = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbceshi/data/ladder_data.js'', ''utf8''\\); console.log\\(c.substring\\(0, 500\\)\\)\")",
+      "Bash(node -e \"const fs = require\\(''fs''\\); const c = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbceshi/data/kline_data.js'', ''utf8''\\); console.log\\(c.substring\\(0, 500\\)\\)\")",
+      "Bash(node -e \"const fs = require\\(''fs''\\); const ladder = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbceshi/data/ladder_data.js'', ''utf8''\\); const kline = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbceshi/data/kline_data.js'', ''utf8''\\); const ladderStocks = ladder.match\\(/\"\"code\"\": \"\"\\([^\"\"]+\\)\"\"/g\\).slice\\(0, 50\\).map\\(s => s.replace\\(''\"\"code\"\": \"\"'', ''''\\).replace\\(''\"\"'', ''''\\)\\); console.log\\(''Sample ladder stocks:'', ladderStocks.slice\\(0, 10\\)\\); const klineStocks = kline.match\\(/\"\"\\(\\\\w+\\)\"\": \\\\{\"\"name\"\"/g\\); console.log\\(''Sample kline stocks:'', klineStocks ? klineStocks.slice\\(0, 10\\) : ''none''\\);\")",
+      "Bash(node -e \"const fs = require\\(''fs''\\); const kline = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbceshi/data/kline_data.js'', ''utf8''\\); const ladderStocks = [''000635.SZ'', ''000798.SZ'', ''000859.SZ'']; ladderStocks.forEach\\(s => { console.log\\(s + '':'', kline.includes\\(s\\)\\); }\\);\")",
+      "Bash(node -e \"const fs = require\\(''fs''\\); const c = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbceshi/data/kline_data.js'', ''utf8''\\); const m = c.match\\(/\"\"values\"\":\\\\s*\\\\[\\\\[\\([\\\\d.]+\\),\\([\\\\d.]+\\),\\([\\\\d.]+\\),\\([\\\\d.]+\\),\\([\\\\d.]+\\)\\\\]/\\); console.log\\(''Values format:'', m ? m[0] : ''not found''\\);\")",
+      "Bash(node -e \"const fs = require\\(''fs''\\); const c = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbceshi/data/kline_data.js'', ''utf8''\\); const m = c.match\\(/\"\"000001\\\\.SZ\"\":\\\\s*\\\\{[^}]+\"\"values\"\":\\\\s*\\\\[\\([^\\\\]]+\\)\\\\]/\\); if \\(m\\) { console.log\\(''Values sample:'', m[1].substring\\(0, 200\\)\\); }\")",
+      "Bash(node -e \"const fs = require\\(''fs''\\); const c = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbceshi/data/kline_data.js'', ''utf8''\\); const m = c.match\\(/\"\"000001\\\\.SZ\"\":\\\\s*\\\\{[^}]+\"\"values\"\":\\\\s*\\\\[\\\\s*\\\\[\\([^\\\\]]+\\)\\\\]/\\); if \\(m\\) { console.log\\(''First values:'', m[1]\\); }\")",
+      "Bash(node -e \"const fs = require\\(''fs''\\); const c = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbceshi/data/kline_data.js'', ''utf8''\\); const m = c.match\\(/.{6}\\\\.SZ.*?\\\\{[\\\\s\\\\S]{0,500}\\\\}/g\\); if \\(m\\) { console.log\\(''Sample stock data:''\\); console.log\\(m[0].substring\\(0, 800\\)\\); }\")",
+      "Bash(node -e \"const fs = require\\(''fs''\\); const c = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbmoni/data/kline_data.js'', ''utf8''\\); const m = c.match\\(/.{6}\\\\.SZ.*?\\\\{[\\\\s\\\\S]{0,500}\\\\}/g\\); if \\(m\\) { console.log\\(''Sample stock data:''\\); console.log\\(m[0].substring\\(0, 1000\\)\\); }\")",
+      "Bash(node -e \"const fs = require\\(''fs''\\); const c = fs.readFileSync\\(''C:/Users/Administrator/Desktop/lbgpT/lbmoni/data/kline_data.js'', ''utf8''\\); const m = c.match\\(/''values'':\\\\s*\\\\[\\\\[\\([\\\\d.,\\\\s-]+\\)\\\\]\\\\]/\\); if \\(m\\) { console.log\\(''Values format sample:'', m[0]\\); } else { console.log\\(''Looking for values differently...''\\); const idx = c.indexOf\\(''values''\\); console.log\\(''Context:'', c.substring\\(idx, idx+200\\)\\); }\")",
+      "Bash(node:*)",
+      "Bash(pkill:*)",
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(python -c:*)",
+      "Bash(python:*)",
+      "Bash(git add:*)",
+      "Bash(git pull:*)",
+      "Bash(git push)",
+      "Bash(git commit:*)",
+      "Bash(git reset:*)",
+      "Bash(git remote remove:*)",
+      "Bash(gh repo create:*)",
+      "Bash(git remote:*)",
+      "Bash(rm:*)"
+    ]
+  }
+}
