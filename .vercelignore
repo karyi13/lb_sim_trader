@@ -1,0 +1,14 @@
+requirements.txt
+main.py
+cli.py
+*.py
+*.pyc
+__pycache__/
+depend/
+function/
+utils/
+tests/
+deploy.sh
+.git/
+data/stock_daily_latest.parquet
+data/*.parquet

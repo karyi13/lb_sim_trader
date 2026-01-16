@@ -27,7 +27,10 @@
       "Bash(git remote remove:*)",
       "Bash(gh repo create:*)",
       "Bash(git remote:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(vercel --prod:*)",
+      "Bash(cat:*)",
+      "Bash(git restore:*)"
     ]
   }
 }

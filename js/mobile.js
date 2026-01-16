@@ -134,7 +134,26 @@ function switchDate(newDate) {
     document.getElementById('currentDate').value = newDate;
 
     renderLadderList();
-    if (AppState.selectedStock) updateStockPanel(AppState.selectedStock);
+    // 如果有选中的股票，需要从新日期获取最新的股票数据
+    if (AppState.selectedStock) {
+        const freshStockData = getStockData(AppState.selectedStock.code);
+        if (freshStockData) {
+            // 如果新日期该股票还在天梯中，更新选中股票的数据
+            AppState.selectedStock = freshStockData;
+            updateStockPanel(freshStockData);
+        } else {
+            // 如果新日期该股票不在天梯中，从K线数据中获取最新价格
+            const klineData = getKlineData(AppState.selectedStock.code);
+            if (klineData && klineData.values && klineData.values.length > 0) {
+                const targetDate = formatDate(newDate);
+                const dateIdx = klineData.dates.indexOf(targetDate);
+                if (dateIdx >= 0) {
+                    AppState.selectedStock.price = klineData.values[dateIdx][1];
+                    updateStockPanel(AppState.selectedStock);
+                }
+            }
+        }
+    }
     updatePositionsInfo();
     renderMyPositions();
     updateAccountInfo();
@@ -414,8 +433,8 @@ function _renderKlineChartMobile(code, klineData) {
             }
         },
         grid: [
-            { left: '8%', right: '8%', top: '8%', height: '45%' },
-            { left: '8%', right: '8%', top: '60%', height: '18%' }
+            { left: '8%', right: '8%', top: '5%', height: '60%' },
+            { left: '8%', right: '8%', top: '72%', height: '12%' }
         ],
         xAxis: [
             {
@@ -463,7 +482,11 @@ function _renderKlineChartMobile(code, klineData) {
             },
             {
                 type: 'slider',
-                bottom: 5,
+                bottom: 0,
+                height: 20,
+                borderColor: 'transparent',
+                fillerColor: 'rgba(24, 144, 255, 0.2)',
+                handleStyle: { color: '#1890ff' },
                 startValue: Math.max(0, validDates.length - 30),
                 endValue: validDates.length - 1,
                 xAxisIndex: [0, 1]
@@ -500,19 +523,16 @@ function _renderKlineChartMobile(code, klineData) {
 
     AppState.klineChart.setOption(option);
 
-    // 保存加载的数据到缓存
-    const cacheData = {
-        ...klineData,
-        dates: validDates,
-        values: validValues,
-        volumes: validVolumes
-    };
+    // 只缓存完整的原始数据，不按日期截取，确保可以来回切换日期
     window.KLINE_DATA_CORE = window.KLINE_DATA_CORE || {};
-    window.KLINE_DATA_CORE[code] = cacheData;
+    // 只有当数据还未存在时才缓存，避免覆盖原始数据
+    if (!window.KLINE_DATA_CORE[code] || window.KLINE_DATA_CORE[code].dates.length < klineData.dates.length) {
+        window.KLINE_DATA_CORE[code] = klineData;
+    }
 
-    // 缓存到加载器
-    if (window.klineLoader) {
-        window.klineLoader.cache.set(code, cacheData);
+    // 缓存到加载器（保存原始完整数据）
+    if (window.klineLoader && (!window.klineLoader.cache.has(code) || window.klineLoader.cache.get(code).dates.length < klineData.dates.length)) {
+        window.klineLoader.cache.set(code, klineData);
     }
 }
 

@@ -317,7 +317,7 @@ html, body {
 }
 
 .chart-container {
-    height: 350px;
+    height: 70vh;
     background: white;
 }
 
