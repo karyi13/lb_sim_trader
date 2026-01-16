@@ -379,6 +379,41 @@ function _renderKlineChartMobile(code, klineData) {
     const volumes = klineData.volumes || [];
     const validVolumes = currentDateIdx >= 0 ? volumes.slice(0, currentDateIdx + 1) : volumes;
 
+    // 生成买卖点标注数据
+    const buyPoints = [];
+    const sellPoints = [];
+
+    // 遍历交易记录，找到该股票的所有买卖点
+    AppState.trades.forEach(trade => {
+        if (trade.code !== code || trade.status !== 'COMPLETED' && trade.status !== 'EXECUTED') return;
+
+        const tradeDate = formatDate(trade.date);
+        const dateIdx = validDates.indexOf(tradeDate);
+        if (dateIdx === -1) return;
+
+        const price = trade.actualPrice || trade.price;
+
+        if (trade.type === 'BUY' || trade.type === 'ADD') {
+            buyPoints.push({
+                name: 'B',
+                value: price,
+                xAxis: dateIdx,
+                yAxis: price,
+                itemStyle: { color: '#ff0000' },
+                label: { show: true, position: 'top', color: '#ff0000', fontWeight: 'bold', fontSize: 12 }
+            });
+        } else if (trade.type === 'SELL') {
+            sellPoints.push({
+                name: 'S',
+                value: price,
+                xAxis: dateIdx,
+                yAxis: price,
+                itemStyle: { color: '#00aa00' },
+                label: { show: true, position: 'bottom', color: '#00aa00', fontWeight: 'bold', fontSize: 12 }
+            });
+        }
+    });
+
     const option = {
         title: { show: false },
         tooltip: {
@@ -505,18 +540,37 @@ function _renderKlineChartMobile(code, klineData) {
                 }
             },
             {
+                name: '买入',
+                type: 'scatter',
+                data: buyPoints,
+                symbol: 'triangle',
+                symbolSize: 12,
+                itemStyle: { color: '#ff0000' },
+                label: { show: true, position: 'top', color: '#ff0000', fontWeight: 'bold', fontSize: 11, formatter: 'B' }
+            },
+            {
+                name: '卖出',
+                type: 'scatter',
+                data: sellPoints,
+                symbol: 'triangle',
+                symbolRotate: 180,
+                symbolSize: 12,
+                itemStyle: { color: '#00aa00' },
+                label: { show: true, position: 'bottom', color: '#00aa00', fontWeight: 'bold', fontSize: 11, formatter: 'S' }
+            },
+            {
                 name: '成交量',
                 type: 'bar',
                 data: validVolumes,
+                xAxisIndex: 1,
+                yAxisIndex: 1,
                 itemStyle: {
                     color: function(params) {
                         const idx = params.dataIndex;
                         if (idx >= validValues.length) return '#00aa00';
                         return validValues[idx][1] >= validValues[idx][0] ? '#ff0000' : '#00aa00';
                     }
-                },
-                xAxisIndex: 1,
-                yAxisIndex: 1
+                }
             }
         ]
     };
