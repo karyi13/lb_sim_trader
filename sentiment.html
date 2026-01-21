@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>市场情绪监控</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px 0;
+            border-bottom: 1px solid #30363d;
+        }
+        .header h1 {
+            color: #58a6ff;
+            font-size: 28px;
+        }
+        .date-navigation {
+            margin-top: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        .date-navigation button {
+            padding: 8px 16px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .date-navigation button:hover {
+            background: #30363d;
+        }
+        .date-navigation button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .current-date {
+            font-size: 18px;
+            color: #58a6ff;
+            padding: 8px 20px;
+            min-width: 120px;
+        }
+        .return-link {
+            color: #58a6ff;
+            text-decoration: none;
+            margin-left: 20px;
+        }
+        .return-link:hover {
+            text-decoration: underline;
+        }
+        /* 日期选择器 */
+        .date-picker-container {
+            position: relative;
+            display: inline-block;
+        }
+        .date-picker {
+            padding: 8px 16px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 140px;
+            text-align: center;
+        }
+        .date-picker:hover {
+            background: #30363d;
+        }
+        .date-picker:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+        .date-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 8px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            z-index: 1000;
+            min-width: 280px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .date-dropdown.show {
+            display: block;
+        }
+        .date-dropdown-category {
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #8b949e;
+            border-bottom: 1px solid #30363d;
+            position: sticky;
+            top: 0;
+            background: #21262d;
+        }
+        .date-dropdown-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.1s;
+        }
+        .date-dropdown-item:hover {
+            background: #30363d;
+        }
+        .date-dropdown-item.active {
+            background: rgba(88, 166, 255, 0.2);
+            color: #58a6ff;
+        }
+        .date-dropdown-item .date {
+            font-family: monospace;
+        }
+        .date-dropdown-item .sentiment-tag {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .sentiment-tag.excellent { background: rgba(63, 185, 80, 0.2); color: #3fb950; }
+        .sentiment-tag.good { background: rgba(165, 214, 255, 0.2); color: #a5d6ff; }
+        .sentiment-tag.cold { background: rgba(210, 153, 34, 0.2); color: #d29922; }
+        .sentiment-tag.freezing { background: rgba(248, 81, 73, 0.2); color: #f85149; }
+        .date-dropdown-input {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 8px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 8px;
+            z-index: 1001;
+        }
+        .date-dropdown-input.show {
+            display: flex;
+            gap: 8px;
+        }
+        .date-dropdown-input input {
+            padding: 8px 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+        .date-dropdown-input input:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+        .date-dropdown-search-label a {
+            color: #58a6ff;
+            text-decoration: none;
+            font-size: 12px;
+        }
+        .date-dropdown-search-label a:hover {
+            text-decoration: underline;
+        }
+        .no-results {
+            padding: 20px;
+            text-align: center;
+            color: #8b949e;
+        }
+        /* 滚动条样式 */
+        .date-dropdown::-webkit-scrollbar {
+            width: 6px;
+        }
+        .date-dropdown::-webkit-scrollbar-track {
+            background: #0d1117;
+        }
+        .date-dropdown::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 3px;
+        }
+        .date-dropdown::-webkit-scrollbar-thumb:hover {
+            background: #484f58;
+        }
+        /* 情绪评分卡片 */
+        .sentiment-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .sentiment-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        .sentiment-card .score {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .sentiment-card .score.excellent { color: #3fb950; }
+        .sentiment-card .score.good { color: #a5d6ff; }
+        .sentiment-card .score.cold { color: #d29922; }
+        .sentiment-card .score.freezing { color: #f85149; }
+        .sentiment-card .label {
+            font-size: 14px;
+            color: #8b949e;
+        }
+        .sentiment-card .status {
+            margin-top: 10px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            display: inline-block;
+        }
+        .sentiment-card .status.excellent { background: rgba(63, 185, 80, 0.2); color: #3fb950; }
+        .sentiment-card .status.good { background: rgba(165, 214, 255, 0.2); color: #a5d6ff; }
+        .sentiment-card .status.cold { background: rgba(210, 153, 34, 0.2); color: #d29922; }
+        .sentiment-card .status.freezing { background: rgba(248, 81, 73, 0.2); color: #f85149; }
+        /* 指标网格 */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .metric-item {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        .metric-item .value {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .metric-item .value.up { color: #3fb950; }
+        .metric-item .value.down { color: #f85149; }
+        .metric-item .value.neutral { color: #c9d1d9; }
+        .metric-item .name {
+            font-size: 13px;
+            color: #8b949e;
+        }
+        .metric-item .threshold {
+            font-size: 11px;
+            color: #6e7681;
+            margin-top: 5px;
+        }
+        /* 图表区域 */
+        .charts-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .chart-container {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .chart-container .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #c9d1d9;
+        }
+        .chart {
+            height: 300px;
+            width: 100%;
+        }
+        .chart-large {
+            height: 400px;
+            width: 100%;
+        }
+        /* 冰点历史 */
+        .freezing-history {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #c9d1d9;
+        }
+        .freezing-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .freezing-table th,
+        .freezing-table td {
+            padding: 10px;
+            text-align: center;
+            border-bottom: 1px solid #30363d;
+        }
+        .freezing-table th {
+            background: #21262d;
+            color: #8b949e;
+            font-weight: 500;
+        }
+        .freezing-table tr:hover {
+            background: #21262d;
+        }
+        .bad-mark {
+            color: #f85149;
+        }
+        .good-mark {
+            color: #3fb950;
+        }
+        /* 加载状态 */
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #8b949e;
+        }
+        .error {
+            text-align: center;
+            padding: 50px;
+            color: #f85149;
+        }
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .charts-section {
+                grid-template-columns: 1fr;
+            }
+            .sentiment-summary {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 先加载数据文件 -->
+    <script src="data/sentiment_data.js"></script>
+
+    <div class="container" id="mainContainer">
+        <header class="header">
+            <h1>市场情绪监控</h1>
+            <div class="date-navigation">
+                <button id="prevDay">◀ 上一日</button>
+                <div class="date-picker-container">
+                    <button class="date-picker" id="datePickerBtn">选择日期</button>
+                    <div class="date-dropdown" id="dateDropdown">
+                        <div class="date-dropdown-search-label">
+                            <a href="#" id="searchDateBtn">搜索日期</a>
+                        </div>
+                    </div>
+                    <div class="date-dropdown-input" id="dateInputContainer">
+                        <input type="text" id="dateInput" placeholder="2025-01-21" maxlength="10">
+                        <button id="dateInputConfirm">确定</button>
+                        <button id="dateInputCancel">取消</button>
+                    </div>
+                </div>
+                <button id="nextDay">下一日 ▶</button>
+                <a href="index.html" class="return-link">返回交易系统</a>
+            </div>
+        </header>
+
+        <!-- 情绪评分 -->
+        <div class="sentiment-summary">
+            <div class="sentiment-card">
+                <div class="label">情绪评分</div>
+                <div class="score" id="sentimentScore">--</div>
+                <div class="status" id="sentimentStatus">--</div>
+            </div>
+            <div class="sentiment-card">
+                <div class="label">冰点触发</div>
+                <div class="score" id="freezeScore">--</div>
+                <div class="status" id="freezeStatus">--</div>
+            </div>
+        </div>
+
+        <!-- 指标网格 -->
+        <div class="metrics-grid">
+            <div class="metric-item">
+                <div class="value" id="limitUpCount">--</div>
+                <div class="name">涨停家数</div>
+                <div class="threshold">冰点: < 30</div>
+            </div>
+            <div class="metric-item">
+                <div class="value" id="limitDownCount">--</div>
+                <div class="name">跌停家数</div>
+                <div class="threshold">危险: > 50</div>
+            </div>
+            <div class="metric-item">
+                <div class="value" id="bombRate">--</div>
+                <div class="name">炸板率 (%)</div>
+                <div class="threshold">冰点: > 40%</div>
+            </div>
+            <div class="metric-item">
+                <div class="value" id="riseFallRatio">--</div>
+                <div class="name">涨跌比</div>
+                <div class="threshold">冰点: 涨 < 跌/5</div>
+            </div>
+            <div class="metric-item">
+                <div class="value" id="threePlusCount">--</div>
+                <div class="name">3板及以上</div>
+                <div class="threshold">冰点: = 0</div>
+            </div>
+            <div class="metric-item">
+                <div class="value" id="limitDownUpRatio">--</div>
+                <div class="name">跌停/涨停比 (%)</div>
+                <div class="threshold">危险: > 100%</div>
+            </div>
+        </div>
+
+        <!-- 图表区域 -->
+        <div class="charts-section">
+            <div class="chart-container">
+                <div class="chart-title">涨停家数 & 炸板率趋势</div>
+                <div class="chart chart-large" id="chartLimitUp"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">涨跌比趋势</div>
+                <div class="chart" id="chartRiseFall"></div>
+            </div>
+        </div>
+
+        <div class="charts-section">
+            <div class="chart-container">
+                <div class="chart-title">连板高度分布</div>
+                <div class="chart" id="chartLevelDist"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">情绪评分趋势</div>
+                <div class="chart" id="chartSentiment"></div>
+            </div>
+        </div>
+
+        <!-- 冰点历史 -->
+        <div class="freezing-history">
+            <div class="section-title">冰点日期历史记录</div>
+            <table class="freezing-table">
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th>涨停数</th>
+                        <th>炸板率</th>
+                        <th>涨跌比</th>
+                        <th>3板+</th>
+                        <th>跌停数</th>
+                        <th>情绪状态</th>
+                    </tr>
+                </thead>
+                <tbody id="freezingTable">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="loading" class="loading" style="display:none;">加载数据中...</div>
+    <div id="error" class="error" style="display:none;"></div>
+
+    <script>
+        // 全局变量
+        let sentimentData = [];
+        let currentIndex = 0;
+        let chartLimitUp, chartRiseFall, chartLevelDist, chartSentiment;
+        let isDropdownOpen = false;
+
+        // 解析涨跌比，从 "涨:跌" 格式获取比例
+        function parseRiseFallRatio(ratioStr) {
+            if (typeof ratioStr === 'number') return ratioStr;
+            const parts = ratioStr.split(':');
+            if (parts.length === 2) {
+                const rise = parseInt(parts[0]);
+                const fall = parseInt(parts[1]);
+                if (fall > 0) return (rise / fall * 100);
+                return 0;
+            }
+            return 0;
+        }
+
+        // 初始化日期选择器
+        function initDatePicker() {
+            const pickerBtn = document.getElementById('datePickerBtn');
+            const dropdown = document.getElementById('dateDropdown');
+            const inputContainer = document.getElementById('dateInputContainer');
+            const searchBtn = document.getElementById('searchDateBtn');
+
+            // 点击选择器按钮
+            pickerBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                inputContainer.classList.remove('show');
+                dropdown.classList.toggle('show');
+                isDropdownOpen = dropdown.classList.contains('show');
+
+                if (isDropdownOpen) {
+                    renderDateList();
+                    scrollToCurrentDate();
+                }
+            });
+
+            // 点击搜索日期链接
+            searchBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropdown.classList.remove('show');
+                inputContainer.classList.add('show');
+                document.getElementById('dateInput').focus();
+            });
+
+            // 点击确定按钮
+            document.getElementById('dateInputConfirm').addEventListener('click', () => {
+                const input = document.getElementById('dateInput').value.trim();
+                if (input) {
+                    gotoDate(input);
+                }
+                inputContainer.classList.remove('show');
+            });
+
+            // 点击取消按钮
+            document.getElementById('dateInputCancel').addEventListener('click', () => {
+                inputContainer.classList.remove('show');
+            });
+
+            // 回车键搜索
+            document.getElementById('dateInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const input = e.target.value.trim();
+                    if (input) {
+                        gotoDate(input);
+                    }
+                    inputContainer.classList.remove('show');
+                }
+            });
+
+            // 点击外部关闭
+            document.addEventListener('click', (e) => {
+                const container = document.querySelector('.date-picker-container');
+                if (!container.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                    inputContainer.classList.remove('show');
+                    isDropdownOpen = false;
+                }
+            });
+        }
+
+        // 渲染日期列表
+        function renderDateList() {
+            const dropdown = document.getElementById('dateDropdown');
+
+            if (!sentimentData || sentimentData.length === 0) {
+                dropdown.innerHTML = '<div class="no-results">暂无数据</div>';
+                return;
+            }
+
+            // 按月份分组
+            const byMonth = {};
+            sentimentData.forEach((d, index) => {
+                const month = d.date.substring(0, 7); // YYYY-MM
+                if (!byMonth[month]) {
+                    byMonth[month] = [];
+                }
+                byMonth[month].push({ ...d, index });
+            });
+
+            // 生成 HTML（按月份倒序）
+            let html = '<div class="date-dropdown-search-label"><a href="#" id="searchDateBtn">搜索日期</a></div>';
+            Object.keys(byMonth).sort().reverse().forEach(month => {
+                html += `<div class="date-dropdown-category">${month}</div>`;
+                byMonth[month].sort((a, b) => b.date.localeCompare(a.date)).forEach(item => {
+                    const score = calculateSentimentScore(item);
+                    const status = getSentimentStatus(score);
+                    const isCurrent = item.index === currentIndex;
+                    const freeze = isFreezingPoint(item).isFreezing;
+                    html += `
+                        <div class="date-dropdown-item ${isCurrent ? 'active' : ''}" data-index="${item.index}">
+                            <span class="date">${item.date}</span>
+                            <span class="sentiment-tag ${freeze ? 'freezing' : status.scoreClass}">
+                                ${freeze ? '冰点' : status.text}
+                            </span>
+                        </div>
+                    `;
+                });
+            });
+
+            dropdown.innerHTML = html;
+
+            // 绑定点击事件 - 先执行所有操作，最后才修改 DOM
+            dropdown.querySelectorAll('.date-dropdown-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    // 阻止冒泡和默认行为
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // 获取目标索引
+                    const targetIndex = parseInt(item.dataset.index);
+                    if (isNaN(targetIndex)) return;
+
+                    // 使用 setTimeout 确保事件完整执行后再修改 DOM
+                    setTimeout(() => {
+                        // 更新当前索引
+                        currentIndex = targetIndex;
+
+                        // 更新按钮显示
+                        if (sentimentData && sentimentData[currentIndex]) {
+                            document.getElementById('datePickerBtn').textContent = sentimentData[currentIndex].date;
+                        }
+
+                        // 更新显示
+                        updateDisplay();
+
+                        // 关闭下拉菜单
+                        document.getElementById('dateDropdown').classList.remove('show');
+                        isDropdownOpen = false;
+                    }, 0);
+                });
+            });
+
+            // 重新绑定搜索按钮事件
+            document.getElementById('searchDateBtn').addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                document.getElementById('dateDropdown').classList.remove('show');
+                document.getElementById('dateInputContainer').classList.add('show');
+                document.getElementById('dateInput').focus();
+            });
+        }
+
+        // 滚动到当前日期
+        function scrollToCurrentDate() {
+            setTimeout(() => {
+                const activeItem = document.querySelector('.date-dropdown-item.active');
+                if (activeItem) {
+                    activeItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                }
+            }, 100);
+        }
+
+        // 跳转到指定日期
+        function gotoDate(dateStr) {
+            const targetIndex = sentimentData.findIndex(d => d.date === dateStr);
+            if (targetIndex !== -1) {
+                currentIndex = targetIndex;
+                updateDisplay();
+                return true;
+            }
+            alert(`未找到日期 ${dateStr} 的数据`);
+            return false;
+        }
+
+        // 情绪评分计算
+        function calculateSentimentScore(data) {
+            let score = 100;
+
+            // 涨停家数权重 30%
+            if (data.limitUpCount < 20) score -= 30;
+            else if (data.limitUpCount < 30) score -= 20;
+            else if (data.limitUpCount < 50) score -= 10;
+            else if (data.limitUpCount < 80) score += 5;
+            else score += 10;
+
+            // 炸板率权重 25%
+            if (data.bombRate > 50) score -= 25;
+            else if (data.bombRate > 40) score -= 20;
+            else if (data.bombRate > 30) score -= 10;
+            else if (data.bombRate < 20) score += 10;
+
+            // 涨跌比权重 20%
+            const rfRatio = parseRiseFallRatio(data.riseFallRatio);
+            if (rfRatio < 15) score -= 20;
+            else if (rfRatio < 20) score -= 15;
+            else if (rfRatio < 30) score -= 5;
+            else if (rfRatio > 60) score += 10;
+
+            // 跌停/涨停比权重 15%
+            if (data.limitDownUpRatio > 100) score -= 15;
+            else if (data.limitDownUpRatio > 50) score -= 10;
+
+            // 3板以上权重 10%
+            if (data.threePlusCount === 0) score -= 10;
+            else if (data.threePlusCount >= 5) score += 10;
+
+            // 跌停数权重 10%
+            if (data.limitDownCount > 100) score -= 10;
+            else if (data.limitDownCount > 50) score -= 5;
+
+            return Math.max(0, Math.min(100, score));
+        }
+
+        // 判断冰点
+        function isFreezingPoint(data) {
+            const rfRatio = parseRiseFallRatio(data.riseFallRatio);
+            const conditions = [
+                data.limitUpCount < 30,        // 涨停少
+                data.bombRate > 40,            // 炸板率高
+                rfRatio < 20,                  // 涨跌比低
+                data.threePlusCount === 0      // 无3板
+            ];
+            const hitCount = conditions.filter(c => c).length;
+            return {
+                isFreezing: hitCount >= 3,
+                hitCount,
+                conditions
+            };
+        }
+
+        // 获取情绪状态
+        function getSentimentStatus(score) {
+            if (score >= 70) return { text: '火热', class: 'excellent', scoreClass: 'excellent' };
+            if (score >= 50) return { text: '良好', class: 'good', scoreClass: 'good' };
+            if (score >= 30) return { text: '偏冷', class: 'cold', scoreClass: 'cold' };
+            return { text: '冰点', class: 'freezing', scoreClass: 'freezing' };
+        }
+
+        // 格式化数字
+        function formatNumber(num, decimals = 2) {
+            return Number(num).toFixed(decimals);
+        }
+
+        // 更新显示
+        function updateDisplay() {
+            if (!sentimentData || sentimentData.length === 0) return;
+
+            const data = sentimentData[currentIndex];
+
+            // 日期
+            document.getElementById('datePickerBtn').textContent = data.date;
+
+            // 情绪评分
+            const score = calculateSentimentScore(data);
+            const status = getSentimentStatus(score);
+            document.getElementById('sentimentScore').textContent = score.toFixed(0);
+            document.getElementById('sentimentScore').className = 'score ' + status.scoreClass;
+            document.getElementById('sentimentStatus').textContent = status.text;
+            document.getElementById('sentimentStatus').className = 'status ' + status.class;
+
+            // 冰点判断
+            const freeze = isFreezingPoint(data);
+            document.getElementById('freezeScore').textContent = freeze.isFreezing ? '是' : '否';
+            document.getElementById('freezeScore').className = 'score ' + (freeze.isFreezing ? 'freezing' : 'good');
+            document.getElementById('freezeStatus').textContent = `触发条件: ${freeze.hitCount}/4`;
+            document.getElementById('freezeStatus').className = 'status ' + (freeze.isFreezing ? 'freezing' : 'good');
+
+            // 指标
+            const limitUpEl = document.getElementById('limitUpCount');
+            limitUpEl.textContent = data.limitUpCount;
+            limitUpEl.className = 'value ' + (data.limitUpCount < 30 ? 'down' : 'neutral');
+
+            const limitDownEl = document.getElementById('limitDownCount');
+            limitDownEl.textContent = data.limitDownCount;
+            limitDownEl.className = 'value ' + (data.limitDownCount > 50 ? 'down' : 'neutral');
+
+            const bombEl = document.getElementById('bombRate');
+            bombEl.textContent = formatNumber(data.bombRate);
+            bombEl.className = 'value ' + (data.bombRate > 40 ? 'down' : 'neutral');
+
+            const riseFallEl = document.getElementById('riseFallRatio');
+            riseFallEl.textContent = data.riseFallRatio;  // 直接显示 "涨:跌" 格式
+            const rfRatio = parseRiseFallRatio(data.riseFallRatio);
+            riseFallEl.className = 'value ' + (rfRatio < 20 ? 'down' : 'neutral');
+
+            const threePlusEl = document.getElementById('threePlusCount');
+            threePlusEl.textContent = data.threePlusCount;
+            threePlusEl.className = 'value ' + (data.threePlusCount === 0 ? 'down' : 'neutral');
+
+            const ratioEl = document.getElementById('limitDownUpRatio');
+            ratioEl.textContent = formatNumber(data.limitDownUpRatio);
+            ratioEl.className = 'value ' + (data.limitDownUpRatio > 100 ? 'down' : 'neutral');
+
+            // 更新导航按钮状态
+            document.getElementById('prevDay').disabled = currentIndex <= 0;
+            document.getElementById('nextDay').disabled = currentIndex >= sentimentData.length - 1;
+
+            // 更新图表
+            updateCharts();
+        }
+
+        // 初始化图表
+        function initCharts() {
+            try {
+                if (typeof echarts === 'undefined') {
+                    console.error('ECharts is not loaded');
+                    return;
+                }
+
+                chartLimitUp = echarts.init(document.getElementById('chartLimitUp'));
+                chartRiseFall = echarts.init(document.getElementById('chartRiseFall'));
+                chartLevelDist = echarts.init(document.getElementById('chartLevelDist'));
+                chartSentiment = echarts.init(document.getElementById('chartSentiment'));
+
+                // 响应式
+                window.addEventListener('resize', () => {
+                    chartLimitUp?.resize();
+                    chartRiseFall?.resize();
+                    chartLevelDist?.resize();
+                    chartSentiment?.resize();
+                });
+
+                updateCharts();
+            } catch (e) {
+                console.error('Charts init error:', e);
+            }
+        }
+
+        // 更新图表
+        function updateCharts() {
+            if (!sentimentData || sentimentData.length === 0) return;
+
+            const data = sentimentData[currentIndex];
+            const recentDays = Math.min(currentIndex + 1, 30);
+            const startIndex = Math.max(0, currentIndex - recentDays + 1);
+            const recentData = sentimentData.slice(startIndex, currentIndex + 1);
+
+            // 涨停数 & 炸板率
+            if (chartLimitUp) {
+                chartLimitUp.setOption({
+                    backgroundColor: 'transparent',
+                    tooltip: {
+                        trigger: 'axis',
+                        backgroundColor: '#21262d',
+                        borderColor: '#30363d',
+                        textStyle: { color: '#c9d1d9' }
+                    },
+                    legend: {
+                        data: ['涨停数', '炸板率'],
+                        textStyle: { color: '#8b949e' }
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: recentData.map(d => d.date.substring(5)),
+                        axisLine: { lineStyle: { color: '#30363d' } },
+                        axisLabel: { color: '#8b949e' }
+                    },
+                    yAxis: [
+                        {
+                            type: 'value',
+                            name: '涨停数',
+                            position: 'left',
+                            splitLine: { lineStyle: { color: '#21262d' } },
+                            axisLabel: { color: '#8b949e' },
+                            axisLine: { lineStyle: { color: '#30363d' } }
+                        },
+                        {
+                            type: 'value',
+                            name: '炸板率(%)',
+                            position: 'right',
+                            max: 100,
+                            splitLine: { show: false },
+                            axisLabel: { color: '#8b949e', formatter: '{value}%' },
+                            axisLine: { lineStyle: { color: '#30363d' } }
+                        }
+                    ],
+                    series: [
+                        {
+                            name: '涨停数',
+                            type: 'line',
+                            yAxisIndex: 0,
+                            data: recentData.map(d => d.limitUpCount),
+                            smooth: true,
+                            lineStyle: { color: '#3fb950', width: 2 },
+                            areaStyle: { color: 'rgba(63,185,80,0.1)' },
+                            markLine: {
+                                data: [{ yAxis: 30, name: '冰点线', lineStyle: { color: '#f85149', type: 'dashed', width: 1 } }]
+                            }
+                        },
+                        {
+                            name: '炸板率',
+                            type: 'line',
+                            yAxisIndex: 1,
+                            data: recentData.map(d => d.bombRate),
+                            smooth: true,
+                            lineStyle: { color: '#f85149', width: 2 },
+                            markLine: {
+                                data: [{ yAxis: 40, name: '冰点线', lineStyle: { color: '#f85149', type: 'dashed', width: 1 } }]
+                            }
+                        }
+                    ]
+                }, true);
+            }
+
+            // 涨跌比
+            if (chartRiseFall) {
+                chartRiseFall.setOption({
+                    backgroundColor: 'transparent',
+                    tooltip: {
+                        trigger: 'axis',
+                        backgroundColor: '#21262d',
+                        borderColor: '#30363d',
+                        textStyle: { color: '#c9d1d9' },
+                        formatter: (params) => {
+                            const d = params[0];
+                            const theData = recentData[d.dataIndex];
+                            return `${d.name}<br/>涨跌比: ${theData.riseFallRatio}<br/>比例: ${(d.value).toFixed(2)}%`;
+                        }
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: recentData.map(d => d.date.substring(5)),
+                        axisLine: { lineStyle: { color: '#30363d' } },
+                        axisLabel: { color: '#8b949e' }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        splitLine: { lineStyle: { color: '#21262d' } },
+                        axisLabel: { color: '#8b949e', formatter: '{value}%' },
+                        axisLine: { lineStyle: { color: '#30363d' } }
+                    },
+                    series: [
+                        {
+                            name: '涨跌比',
+                            type: 'bar',
+                            data: recentData.map(d => {
+                                const val = parseRiseFallRatio(d.riseFallRatio);
+                                return {
+                                    value: val,
+                                    itemStyle: { color: val < 20 ? '#f85149' : '#3fb950' }
+                                };
+                            }),
+                            markLine: {
+                                data: [{ yAxis: 20, name: '冰点线', lineStyle: { color: '#f85149', type: 'dashed', width: 1 } }]
+                            }
+                        }
+                    ]
+                }, true);
+            }
+
+            // 连板分布
+            if (chartLevelDist) {
+                const levels = ['1连板', '2连板', '3连板', '4连板', '5连板', '5板以上'];
+                chartLevelDist.setOption({
+                    backgroundColor: 'transparent',
+                    tooltip: {
+                        trigger: 'item',
+                        backgroundColor: '#21262d',
+                        borderColor: '#30363d',
+                        textStyle: { color: '#c9d1d9' }
+                    },
+                    legend: {
+                        orient: 'vertical',
+                        left: 'left',
+                        textStyle: { color: '#8b949e' }
+                    },
+                    series: [
+                        {
+                            name: '连板分布',
+                            type: 'pie',
+                            radius: ['40%', '70%'],
+                            center: ['60%', '50%'],
+                            data: levels.map(l => ({ name: l, value: data.levelDist[l] || 0 })),
+                            label: { color: '#c9d1d9' },
+                            itemStyle: {
+                                borderRadius: 5,
+                                borderColor: '#161b22',
+                                borderWidth: 2
+                            },
+                            emphasis: {
+                                itemStyle: {
+                                    shadowBlur: 10,
+                                    shadowOffsetX: 0,
+                                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                }
+                            }
+                        }
+                    ]
+                }, true);
+            }
+
+            // 情绪评分趋势
+            if (chartSentiment) {
+                chartSentiment.setOption({
+                    backgroundColor: 'transparent',
+                    tooltip: {
+                        trigger: 'axis',
+                        backgroundColor: '#21262d',
+                        borderColor: '#30363d',
+                        textStyle: { color: '#c9d1d9' }
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: sentimentData.map(d => d.date.substring(5)),
+                        axisLine: { lineStyle: { color: '#30363d' } },
+                        axisLabel: { color: '#8b949e' }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        min: 0,
+                        max: 100,
+                        splitLine: { lineStyle: { color: '#21262d' } },
+                        axisLabel: { color: '#8b949e' },
+                        axisLine: { lineStyle: { color: '#30363d' } }
+                    },
+                    visualMap: {
+                        pieces: [
+                            { lte: 30, color: '#f85149' },
+                            { gt: 30, lte: 50, color: '#d29922' },
+                            { gt: 50, lte: 70, color: '#a5d6ff' },
+                            { gt: 70, color: '#3fb950' }
+                        ],
+                        show: false,
+                        outOfRange: { color: '#c9d1d9' }
+                    },
+                    series: [
+                        {
+                            name: '情绪评分',
+                            type: 'line',
+                            data: sentimentData.map(d => calculateSentimentScore(d)),
+                            smooth: true,
+                            lineStyle: { width: 2 },
+                            markLine: {
+                                data: [
+                                    { yAxis: 30, name: '冰点', lineStyle: { color: '#f85149', type: 'dashed', width: 1 } },
+                                    { yAxis: 50, name: '转折', lineStyle: { color: '#d29922', type: 'dashed', width: 1 } }
+                                ]
+                            },
+                            markPoint: {
+                                symbol: 'circle',
+                                symbolSize: 8,
+                                itemStyle: { color: '#f85149' },
+                                data: sentimentData.map((d, i) => {
+                                    const s = calculateSentimentScore(d);
+                                    return s < 30 ? { coord: [i, s], name: d.date.substring(5) } : null;
+                                }).filter(d => d)
+                            }
+                        }
+                    ]
+                }, true);
+            }
+        }
+
+        // 生成冰点表格
+        function generateFreezingTable() {
+            if (!sentimentData || sentimentData.length === 0) return;
+
+            const freezingDays = sentimentData.filter(d => isFreezingPoint(d).isFreezing);
+
+            const tbody = document.getElementById('freezingTable');
+            tbody.innerHTML = freezingDays.map(d => {
+                const score = calculateSentimentScore(d);
+                const status = getSentimentStatus(score);
+                const rfRatio = parseRiseFallRatio(d.riseFallRatio);
+                return `
+                    <tr>
+                        <td>${d.date}</td>
+                        <td class="${d.limitUpCount < 30 ? 'bad-mark' : ''}">${d.limitUpCount}</td>
+                        <td class="${d.bombRate > 40 ? 'bad-mark' : ''}">${formatNumber(d.bombRate)}%</td>
+                        <td class="${rfRatio < 20 ? 'bad-mark' : ''}">${d.riseFallRatio}（${rfRatio.toFixed(2)}%）</td>
+                        <td class="${d.threePlusCount === 0 ? 'bad-mark' : 'good-mark'}">${d.threePlusCount}</td>
+                        <td>${d.limitDownCount}</td>
+                        <td>${status.text}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            if (freezingDays.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7">暂无冰点记录</td></tr>';
+            }
+        }
+
+        // 初始化应用
+        function initApp() {
+            console.log('Initializing app...');
+
+            // 检查数据
+            if (typeof window.SENTIMENT_DATA !== 'undefined' && window.SENTIMENT_DATA) {
+                sentimentData = window.SENTIMENT_DATA;
+                console.log('Loaded', sentimentData.length, 'data records');
+
+                if (sentimentData.length > 0) {
+                    currentIndex = sentimentData.length - 1;
+                    initDatePicker();
+                    initCharts();
+                    updateDisplay();
+                    generateFreezingTable();
+                } else {
+                    document.getElementById('mainContainer').innerHTML = '<div class="error">数据为空，请先运行 python main.py analyze</div>';
+                }
+            } else {
+                document.getElementById('mainContainer').innerHTML = '<div class="error">数据文件未加载，请确保 data/sentiment_data.js 文件存在</div>';
+                console.error('SENTIMENT_DATA not found');
+            }
+        }
+
+        // 等待页面和数据加载完成
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initApp);
+        } else {
+            initApp();
+        }
+
+        // 导航按钮事件
+        document.getElementById('prevDay').addEventListener('click', () => {
+            if (currentIndex > 0) {
+                currentIndex--;
+                updateDisplay();
+            }
+        });
+
+        document.getElementById('nextDay').addEventListener('click', () => {
+            if (currentIndex < sentimentData.length - 1) {
+                currentIndex++;
+                updateDisplay();
+            }
+        });
+    </script>
+</body>
+</html>

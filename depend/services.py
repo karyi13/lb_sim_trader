@@ -53,7 +53,7 @@ def get_thread_api():
 
 class PyTDXDataFetcher:
     """PyTDX数据获取实现"""
-    
+
     def __init__(self):
         self.main_api = TdxHq_API()
         self.connected = False
@@ -69,32 +69,55 @@ class PyTDXDataFetcher:
         except Exception as e:
             logger.error(f"Unexpected connection error: {e}")
 
-    def get_stock_list(self):
-        """Get all A-share stocks."""
+    def get_security_list_pytdx(self, market=0):
+        """Get A-share stock list from PyTDX directly."""
         try:
-            logger.info("Fetching stock list via AkShare...")
-            stock_df = ak.stock_zh_a_spot_em()
+            # Get security list bytes from PyTDX
+            data = self.main_api.get_security_list(market, 0)
+            if not data:
+                return []
+
+            # Convert bytes to list of stocks
             stocks = []
-            for _, row in stock_df.iterrows():
-                symbol = str(row['代码'])
-                name = row['名称']
-                if symbol.startswith(('900', '200')):
+            for stock in data:
+                # stock格式: (code, name, pre close, vol amount)
+                code = stock[0]
+                name = stock[1].decode('utf-8', errors='ignore') if isinstance(stock[1], bytes) else str(stock[1])
+
+                if not code:
                     continue
 
-                if symbol.startswith(('60', '68')):
-                    full_symbol = f"{symbol}.SH"
-                elif symbol.startswith(('00', '30')):
-                    full_symbol = f"{symbol}.SZ"
-                else:
+                # Filter B-shares (900, 200)
+                if code.startswith('900') or code.startswith('200'):
                     continue
 
-                stocks.append({'symbol': full_symbol, 'code': symbol, 'name': name})
+                # Determine market suffix
+                if code.startswith('6'):  # Shanghai A-shares and STAR
+                    full_symbol = f"{code}.SH"
+                else:  # Shenzhen A-shares and ChiNext
+                    full_symbol = f"{code}.SZ"
 
-            logger.info(f"Found {len(stocks)} A-share stocks.")
+                stocks.append({'symbol': full_symbol, 'code': code, 'name': name})
+
             return stocks
         except Exception as e:
-            logger.error(f"Error fetching stock list: {e}")
-            raise  # Re-raise the exception to trigger the retry decorator
+            logger.warning(f"Failed to get PyTDX security list for market {market}: {e}")
+            return []
+
+    def get_stock_list(self):
+        """Get all A-share stocks via PyTDX."""
+        stocks = []
+
+        # Market 0 = Shenzhen, Market 1 = Shanghai
+        for market in [0, 1]:
+            try:
+                market_stocks = self.get_security_list_pytdx(market)
+                stocks.extend(market_stocks)
+            except Exception as e:
+                logger.warning(f"Failed to get stocks for market {market}: {e}")
+
+        logger.info(f"Found {len(stocks)} A-share stocks from PyTDX.")
+        return stocks
 
     def fetch_daily_data(self, code, market, start_date, end_date):
         """Fetch daily data using Thread-Local PyTDX with specific date range."""
@@ -143,7 +166,63 @@ class PyTDXDataFetcher:
 
 class AkShareDataFetcher:
     """AkShare数据获取实现"""
-    
+
+    @staticmethod
+    def _setup_akshare_headers():
+        """Patch requests to add headers needed by eastmoney.com"""
+        original_get = requests.get
+        original_session_request = requests.Session.request
+        original_session_init = requests.Session.__init__
+
+        _headers_set = set()
+
+        def patched_get(*args, **kwargs):
+            if 'eastmoney.com' in args[0]:
+                headers = kwargs.get('headers', {})
+                headers.update({
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': 'https://quote.eastmoney.com/',
+                })
+                kwargs['headers'] = headers
+                # Don't use system proxy for eastmoney
+                kwargs.setdefault('proxies', {})
+            return original_get(*args, **kwargs)
+
+        def patched_session_request(self, *args, **kwargs):
+            url = args[1] if len(args) > 1 else kwargs.get('url', '')
+            if 'eastmoney.com' in url and id(self) not in _headers_set:
+                self.trust_env = False
+                self.headers.update({
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': 'https://quote.eastmoney.com/',
+                })
+                self.proxies.clear()  # Clear proxies
+                _headers_set.add(id(self))
+            return original_session_request(self, *args, **kwargs)
+
+        def patched_session_init(self, *args, **kwargs):
+            original_session_init(self, *args, **kwargs)
+            self.trust_env = False
+
+        requests.get = patched_get
+        requests.Session.request = patched_session_request
+        requests.Session.__init__ = patched_session_init
+
+    def __init__(self):
+        self._setup_akshare_headers()
+        self._last_request_time = 0
+        self._lock = threading.Lock()
+
+    def _rate_limit(self):
+        """Rate limiting for AkShare requests"""
+        with self._lock:
+            now = time.time()
+            elapsed = now - self._last_request_time
+            min_delay = getattr(config, 'AKSHARE_REQUEST_DELAY', 0.5)
+            if elapsed < min_delay:
+                time.sleep(min_delay - elapsed)
+            self._last_request_time = time.time()
+
     def get_stock_list(self):
         """获取股票列表 - 使用AkShare"""
         try:
@@ -178,6 +257,8 @@ class AkShareDataFetcher:
         error_msg = ""
 
         try:
+            # Rate limiting before request
+            self._rate_limit()
             # AkShare is HTTP based, thread-safe usually
             df = ak.stock_zh_a_hist(symbol=code, period="daily", start_date=start_date, end_date=end_date, adjust="qfq")
             if df.empty:
@@ -209,24 +290,37 @@ class AkShareDataFetcher:
 
 class CompositeDataFetcher:
     """复合数据获取器，结合PyTDX和AkShare"""
-    
+
     def __init__(self, pytdx_fetcher: PyTDXDataFetcher, akshare_fetcher: AkShareDataFetcher):
         self.pytdx_fetcher = pytdx_fetcher
         self.akshare_fetcher = akshare_fetcher
 
     def get_stock_list(self):
-        """获取股票列表，优先使用AkShare"""
-        return self.akshare_fetcher.get_stock_list()
+        """获取股票列表，优先使用AkShare，失败则使用PyTDX"""
+        try:
+            return self.akshare_fetcher.get_stock_list()
+        except Exception as e:
+            logger.warning(f"AkShare stock list failed: {e}, trying PyTDX...")
+            try:
+                return self.pytdx_fetcher.get_stock_list()
+            except Exception as e2:
+                logger.error(f"PyTDX stock list also failed: {e2}")
+                raise
 
     def fetch_daily_data(self, code, market, start_date, end_date):
         """获取日线数据，优先使用PyTDX，失败后使用AkShare"""
         # Try PyTDX first
         df = self.pytdx_fetcher.fetch_daily_data(code, market, start_date, end_date)
 
-        # Fallback to AkShare
+        # Fallback to AkShare - catch exceptions to avoid breaking the whole process
         if df is None or df.empty:
-            symbol = f"{code}.SH" if market == 1 else f"{code}.SZ"  # Construct symbol for AkShare
-            df = self.akshare_fetcher.fetch_daily_data(code, symbol, start_date, end_date)
+            try:
+                symbol = f"{code}.SH" if market == 1 else f"{code}.SZ"
+                df = self.akshare_fetcher.fetch_daily_data(code, symbol, start_date, end_date)
+            except Exception as e:
+                # Log error but don't raise - PyTDX data that succeeded will be saved
+                logger.debug(f"AkShare fallback failed for {code}: {str(e)}")
+                df = None
 
         return df
 

@@ -476,10 +476,12 @@ class DataFetcher:
 
 class Analyzer:
     def __init__(self, input_file: str = DEFAULT_OUTPUT_FILE, output_ladder: str = config.DEFAULT_LADDER_FILE, output_promotion: str = config.DEFAULT_PROMOTION_FILE,
+                 output_sentiment: str = config.DEFAULT_SENTIMENT_FILE,
                  data_validator=None, data_storage=None):
         self.input_file = input_file
         self.output_ladder = output_ladder
         self.output_promotion = output_promotion
+        self.output_sentiment = output_sentiment
         self.df = None
         self.concepts_cache = {}
         self.data_validator = data_validator or container.get('data_validator')
@@ -635,6 +637,109 @@ class Analyzer:
 
         self.df.update(limit_ups)
 
+    def calculate_sentiment_indicators(self):
+        """
+        计算情绪冰点指标
+        包括：涨停家数、跌停家数、炸板家数、炸板率、连板高度分布、涨跌比等
+        """
+        logger.info("Calculating sentiment indicators...")
+
+        # 标记炸板：最高价触及涨停价但收盘不在涨停价
+        self.df['is_opened_board'] = (
+            (self.df['high'] >= self.df['limit_price'] - 0.01) &
+            (self.df['close'] < self.df['limit_price'] - 0.01)
+        )
+
+        # 添加sentiment相关方法到process中
+
+    def calculate_daily_sentiment(self):
+        """
+        计算每日情绪指标
+        返回按日期汇总的情绪指标数据
+        """
+        logger.info("Calculating daily sentiment indicators...")
+
+        # 按日期分组统计
+        sentiment_stats = []
+
+        dates = sorted(self.df['date'].unique())
+
+        for date in dates:
+            date_df = self.df[self.df['date'] == date].copy()
+
+            # 总股票数
+            total_stocks = len(date_df)
+
+            # 涨停家数（非ST）
+            limit_up = date_df[date_df['is_limit_up'] & ~date_df['name'].str.contains('ST', na=False)]
+            limit_up_count = len(limit_up)
+
+            # 跌停家数 - 计算跌停价并判断
+            date_df['limit_down_price'] = np.nan
+            # ST 5%跌停
+            st_mask = date_df['name'].str.contains('ST', na=False)
+            date_df.loc[st_mask, 'limit_down_price'] = np.floor(
+                date_df.loc[st_mask, 'prev_close'] * 0.95 * 100 - 0.5) / 100
+            # 科创创业板 20%跌停
+            twenty_mask = date_df['symbol'].str.startswith(('30', '68'))
+            date_df.loc[twenty_mask & ~st_mask, 'limit_down_price'] = np.floor(
+                date_df.loc[twenty_mask & ~st_mask, 'prev_close'] * 0.80 * 100 - 0.5) / 100
+            # 主板 10%跌停
+            main_mask = (~st_mask) & (~twenty_mask)
+            date_df.loc[main_mask, 'limit_down_price'] = np.floor(
+                date_df.loc[main_mask, 'prev_close'] * 0.90 * 100 - 0.5) / 100
+
+            # 跌停：最低价≤跌停价
+            date_df['is_limit_down'] = date_df['low'] <= (date_df['limit_down_price'] + 0.01)
+            limit_down_count = len(date_df[date_df['is_limit_down'] & ~date_df['name'].str.contains('ST', na=False)])
+
+            # 炸板家数：涨停被打开的
+            opened_board_count = len(date_df[date_df['is_opened_board']])
+
+            # 封板成功数 = 涨停数 - 炸板数
+            sealed_board_count = limit_up_count - opened_board_count
+
+            # 炸板率
+            bomb_rate = (opened_board_count / limit_up_count * 100) if limit_up_count > 0 else 0
+
+            # 跌停/涨停比
+            limit_down_up_ratio = (limit_down_count / limit_up_count * 100) if limit_up_count > 0 else 0
+
+            # 连板高度分布
+            level_dist = {}
+            for level in [1, 2, 3, 4, 5]:
+                cnt = len(limit_up[limit_up['consecutive_limit_up_days'] == level])
+                level_dist[f'{level}连板'] = cnt
+            # 5板以上
+            higher_cnt = len(limit_up[limit_up['consecutive_limit_up_days'] > 5])
+            level_dist['5板以上'] = higher_cnt
+
+            # 涨跌比
+            rise_count = len(date_df[date_df['close'] > date_df['prev_close']])
+            fall_count = len(date_df[date_df['close'] < date_df['prev_close']])
+            rise_fall_ratio = (rise_count / fall_count * 100) if fall_count > 0 else 0
+
+            # 3板及以上数量
+            three_plus_count = len(limit_up[limit_up['consecutive_limit_up_days'] >= 3])
+
+            sentiment_stats.append({
+                'date': date,
+                'total_stocks': total_stocks,
+                'limit_up_count': limit_up_count,
+                'limit_down_count': limit_down_count,
+                'opened_board_count': opened_board_count,
+                'sealed_board_count': sealed_board_count,
+                'bomb_rate': bomb_rate,
+                'limit_down_up_ratio': limit_down_up_ratio,
+                'level_dist': level_dist,
+                'rise_count': rise_count,
+                'fall_count': fall_count,
+                'rise_fall_ratio': rise_fall_ratio,
+                'three_plus_count': three_plus_count
+            })
+
+        return pd.DataFrame(sentiment_stats)
+
     def validate_processed_data(self):
         """
         验证处理后的数据
@@ -674,6 +779,7 @@ class Analyzer:
             "input_file": self.input_file,
             "output_ladder": self.output_ladder,
             "output_promotion": self.output_promotion,
+            "output_sentiment": self.output_sentiment,
             "chunk_size": chunk_size
         })
 
@@ -709,6 +815,14 @@ class Analyzer:
             "duration_seconds": round(duration, 4)
         })
 
+        # Calculate sentiment indicators (炸板标识等)
+        timer_id = performance_monitor.start_timer("calculate_sentiment_indicators")
+        self.calculate_sentiment_indicators()
+        duration = performance_monitor.end_timer(timer_id)
+        logger.info("Completed sentiment indicators calculation", {
+            "duration_seconds": round(duration, 4)
+        })
+
         # Filter for Ladder: consecutive >= 1 (include single-day limit-ups)
         timer_id = performance_monitor.start_timer("filter_ladder_data")
         ladder_df = self.df[self.df['consecutive_limit_up_days'] >= 1].copy()
@@ -717,33 +831,105 @@ class Analyzer:
             "duration_seconds": round(duration, 4)
         })
 
-        # Fetch concepts only for these ladder stocks
+        # Fetch concepts only for these ladder stocks (with caching)
         unique_symbols = ladder_df['symbol'].unique()
-        logger.info(f"Fetching concepts for {len(unique_symbols)} stocks in ladder...")
+        logger.info(f"Checking concepts for {len(unique_symbols)} stocks in ladder...")
 
-        # Fetch concepts for each stock
+        # 加载概念缓存
+        concept_cache_file = config.DEFAULT_CONCEPT_CACHE_FILE
+        concept_cache = {}
+        cache_needs_update = False
+
+        try:
+            import os
+            if os.path.exists(concept_cache_file):
+                with open(concept_cache_file, 'r', encoding='utf-8') as f:
+                    cache_data = json.load(f)
+                    concept_cache = cache_data.get('concepts', {})
+                    logger.info(f"Loaded concept cache with {len(concept_cache)} entries")
+        except Exception as e:
+            logger.warning(f"Failed to load concept cache: {e}")
+
+        # 计算缓存过期时间
+        cache_expiry_days = config.CONCEPT_CACHE_DAYS
+        current_date_str = self.df['date'].max()
+        try:
+            current_date = pd.to_datetime(current_date_str, format='%Y%m%d')
+            cache_expire_date = current_date - pd.Timedelta(days=cache_expiry_days)
+        except:
+            current_date = pd.Timestamp.now()
+            cache_expire_date = current_date - pd.Timedelta(days=cache_expiry_days)
+
+        # 判断哪些需要获取概念
+        symbols_to_fetch = []
+        for symbol in unique_symbols:
+            need_fetch = True
+            if symbol in concept_cache:
+                cache_entry = concept_cache[symbol]
+                # 检查缓存日期
+                if 'cached_at' in cache_entry:
+                    try:
+                        cache_date = pd.to_datetime(cache_entry['cached_at'])
+                        if cache_date >= cache_expire_date:
+                            need_fetch = False
+                    except:
+                        pass
+            if need_fetch:
+                symbols_to_fetch.append(symbol)
+
+        logger.info(f"Need to fetch concepts for {len(symbols_to_fetch)}/{len(unique_symbols)} stocks")
+
+        # Fetch concepts for stocks that need updating
         def fetch_concept_for_stock(symbol):
             result = get_stock_concepts(symbol)
             if result and 'concepts' in result:
+                # 更新缓存
+                concept_cache[symbol] = {
+                    'concepts': result['concepts'],
+                    'cached_at': current_date_str
+                }
                 return symbol, result['concepts']
             return symbol, []
 
         # Use ThreadPoolExecutor to fetch concepts in parallel
-        timer_id = performance_monitor.start_timer("fetch_concepts_parallel")
         concept_map = {}
-        with ThreadPoolExecutor(max_workers=config.CONCEPT_FETCH_WORKERS) as executor:
-            futures = {executor.submit(fetch_concept_for_stock, symbol): symbol for symbol in unique_symbols}
-            for i, future in enumerate(as_completed(futures)):
-                symbol, concepts = future.result()
-                concept_map[symbol] = concepts
-                if (i + 1) % 100 == 0:
-                    logger.info(f"Fetched concepts for {i + 1}/{len(unique_symbols)} stocks...")
+        if symbols_to_fetch:
+            timer_id = performance_monitor.start_timer("fetch_concepts_parallel")
+            with ThreadPoolExecutor(max_workers=config.CONCEPT_FETCH_WORKERS) as executor:
+                futures = {executor.submit(fetch_concept_for_stock, symbol): symbol for symbol in symbols_to_fetch}
+                for i, future in enumerate(as_completed(futures)):
+                    symbol, concepts = future.result()
+                    concept_map[symbol] = concepts
+                    if (i + 1) % 100 == 0:
+                        logger.info(f"Fetched concepts for {i + 1}/{len(symbols_to_fetch)} stocks...")
 
-        duration = performance_monitor.end_timer(timer_id)
-        logger.info(f"Completed fetching concepts for {len(concept_map)} stocks", {
-            "duration_seconds": round(duration, 4),
-            "stocks_count": len(concept_map)
-        })
+            duration = performance_monitor.end_timer(timer_id)
+            cache_needs_update = True
+            logger.info(f"Completed fetching concepts for {len(concept_map)} stocks", {
+                "duration_seconds": round(duration, 4)
+            })
+
+        # 从缓存加载已有概念
+        for symbol in unique_symbols:
+            if symbol not in concept_map and symbol in concept_cache:
+                concept_map[symbol] = concept_cache[symbol]['concepts']
+
+        logger.info(f"Total concepts available: {len(concept_map)}/{len(unique_symbols)}")
+
+        # 保存更新后的缓存
+        if cache_needs_update or not os.path.exists(concept_cache_file):
+            timer_id = performance_monitor.start_timer("save_concept_cache")
+            try:
+                with open(concept_cache_file, 'w', encoding='utf-8') as f:
+                    json.dump({
+                        'data_version': '1.0',
+                        'concepts': concept_cache,
+                        'last_updated': current_date_str
+                    }, f, ensure_ascii=False, indent=2)
+                logger.info(f"Concept cache saved to {concept_cache_file}")
+            except Exception as e:
+                logger.warning(f"Failed to save concept cache: {e}")
+            duration = performance_monitor.end_timer(timer_id)
 
         # Map concepts back to ladder_df
         timer_id = performance_monitor.start_timer("map_concepts_to_dataframe")
@@ -831,6 +1017,47 @@ class Analyzer:
         logger.info(f"Saved promotion rates to {self.output_promotion}", {
             "duration_seconds": round(duration, 4),
             "records_count": len(stats_df)
+        })
+
+        # Calculate and save sentiment indicators
+        timer_id = performance_monitor.start_timer("calculate_sentiment")
+        sentiment_df = self.calculate_daily_sentiment()
+        duration = performance_monitor.end_timer(timer_id)
+        logger.info(f"Completed sentiment indicators calculation", {
+            "duration_seconds": round(duration, 4),
+            "sentiment_records_count": len(sentiment_df)
+        })
+
+        # Convert sentiment data to JS-friendly format and save
+        timer_id = performance_monitor.start_timer("save_sentiment_data")
+        sentiment_data = []
+        for _, row in sentiment_df.iterrows():
+            # 格式化日期为 YYYY-MM-DD
+            date_str = pd.to_datetime(row['date']).strftime('%Y-%m-%d')
+            sentiment_data.append({
+                'date': date_str,
+                'totalStocks': int(row['total_stocks']),
+                'limitUpCount': int(row['limit_up_count']),
+                'limitDownCount': int(row['limit_down_count']),
+                'openedBoardCount': int(row['opened_board_count']),
+                'sealedBoardCount': int(row['sealed_board_count']),
+                'bombRate': round(float(row['bomb_rate']), 2),
+                'limitDownUpRatio': round(float(row['limit_down_up_ratio']), 2),
+                'levelDist': row['level_dist'],
+                'riseCount': int(row['rise_count']),
+                'fallCount': int(row['fall_count']),
+                'riseFallRatio': f"{int(row['rise_count'])}:{int(row['fall_count'])}",
+                'threePlusCount': int(row['three_plus_count'])
+            })
+
+        sentiment_json = json.dumps(sentiment_data, ensure_ascii=False)
+        with open(self.output_sentiment, 'w', encoding='utf-8') as f:
+            f.write(f"// 自动生成的情绪指标数据文件\nwindow.SENTIMENT_DATA = {sentiment_json};")
+
+        duration = performance_monitor.end_timer(timer_id)
+        logger.info(f"Saved sentiment data to {self.output_sentiment}", {
+            "duration_seconds": round(duration, 4),
+            "sentiment_records_count": len(sentiment_data)
         })
 
 
@@ -1142,7 +1369,10 @@ def main():
         )
         _disconnect_all_tdx_connections()
     elif args.command == 'analyze':
-        analyzer = Analyzer(input_file=args.input_file)
+        analyzer = Analyzer(
+            input_file=args.input_file,
+            output_sentiment=config.DEFAULT_SENTIMENT_FILE
+        )
         analyzer.process(chunk_size=args.chunk_size)
     elif args.command in ['generate-ladder', 'ladder', 'l']:
         generate_ladder_data_for_html(chunk_size=args.chunk_size)
@@ -1162,7 +1392,10 @@ def main():
         )
 
         # 2. 分析数据
-        analyzer = Analyzer(input_file=output_file)
+        analyzer = Analyzer(
+            input_file=output_file,
+            output_sentiment=config.DEFAULT_SENTIMENT_FILE
+        )
         analyzer.process(chunk_size=args.chunk_size)
 
         # 3. 生成阶梯数据

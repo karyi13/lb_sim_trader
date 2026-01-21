@@ -30,7 +30,10 @@
       "Bash(rm:*)",
       "Bash(vercel --prod:*)",
       "Bash(cat:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(set HTTP_PROXY=)",
+      "Bash(set HTTPS_PROXY=)",
+      "Bash(set:*)"
     ]
   }
 }

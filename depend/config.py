@@ -14,6 +14,9 @@ class Config:
     DEFAULT_PROMOTION_FILE: str = os.path.join('data', 'promotion_rates.csv')
     DEFAULT_LADDER_JS_FILE: str = os.path.join('data', 'ladder_data.js')
     DEFAULT_KLINE_JS_FILE: str = os.path.join('data', 'kline_data.js')
+    DEFAULT_SENTIMENT_FILE: str = os.path.join('data', 'sentiment_data.js')
+    DEFAULT_CONCEPT_CACHE_FILE: str = os.path.join('data', 'concepts_cache.json')
+    CONCEPT_CACHE_DAYS: int = 7  # 概念缓存天数
     
     # 默认日期
     DEFAULT_START_DATE: str = '20241220'
@@ -28,6 +31,8 @@ class Config:
     # 并发配置
     MAX_WORKERS: int = 20
     CONCEPT_FETCH_WORKERS: int = 10
+    AKSHARE_WORKERS: int = 3  # AkShare 并发数，减小以避免被限流
+    AKSHARE_REQUEST_DELAY: float = 0.5  # AkShare 请求延迟(秒)
     
     # 数据处理配置
     CHUNK_SIZE: int = 50000
